@@ -15,9 +15,7 @@ int inhabilitado;
  * incorporates the on-board hardware USART of the Microchip
  * PIC16Fxxx series of devices. */
 
-#define S3 RD0    // Sensor izquierdo
-#define S2 RD1    // Sensor central
-#define S1 RD2    // Sensor derecho
+
 
 // Pines del puente H
 #define IN1 RD4
@@ -272,6 +270,7 @@ void main(void){
             // 🔹 Permitir siempre mover el servo con 'X', incluso si está inhabilitado
             if (recibido == 'X') {
                 mover_servo();   // Ejecutar movimiento de 90°→0°→90°
+                continue;
             }
 
             // 🔹 Control de movimiento solo si no está inhabilitado
