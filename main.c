@@ -26,10 +26,17 @@ int inhabilitado;
 
 #define LED RD3
 
-#define PW_0DEG     20   // valor para 0? (ajusta experimentalmente)
-#define PW_90DEG    10   // valor para 90? (ajusta experimentalmente)
 
-unsigned char PW, PER;
+// === CONFIGURACIÓN SERVO ===
+#define SERVO_TRIS TRISDbits.TRISD2
+#define SERVO_PIN  PORTDbits.RD2
+
+#define PULSE_US_0DEG   1000u
+#define PULSE_US_90DEG  2000u
+#define PERIOD_US       20000u
+
+
+
 
 // Velocidades del PWM
 int vel_giro = 28;
@@ -40,6 +47,80 @@ int vel_curva = 15;
 unsigned int valorADC;
 float voltaje;
 const float UMBRAL = 2.0;  // Voltaje de referencia para encender el LED
+
+
+// --- Funciones de control del servo ---
+static inline uint16_t getTMR1(void)
+{
+    uint8_t h, l;
+    l = TMR1L;
+    h = TMR1H;
+    return ((uint16_t)h << 8) | l;
+}
+
+static void wait_us(uint16_t delay_us)
+{
+    uint16_t start = getTMR1();
+    while ((uint16_t)(getTMR1() - start) < delay_us);
+}
+
+static inline uint16_t angle_to_us(uint8_t ang)
+{
+    if (ang > 90) ang = 90; // límite a 90°
+    return (uint16_t)(PULSE_US_0DEG + ((uint32_t)ang * (PULSE_US_90DEG - PULSE_US_0DEG) / 90));
+}
+
+// --- Movimiento de servo 90°→0°→90° ---
+void mover_servo(void)
+{
+    SERVO_TRIS = 0;
+    SERVO_PIN = 0;
+
+    // Configurar Timer1 (Fosc/4 = 1 MHz, 1 tick = 1 µs)
+    T1CON = 0x00;
+    TMR1H = 0;
+    TMR1L = 0;
+    T1CONbits.TMR1ON = 1;
+
+    // --- De 90° a 0° ---
+    for (int16_t ang = 90; ang >= 0; ang--) {
+        uint16_t pulse = angle_to_us((uint8_t)ang);
+        SERVO_PIN = 1;
+        wait_us(pulse);
+        SERVO_PIN = 0;
+        wait_us(PERIOD_US - pulse);
+    }
+
+    // --- Mantener en 0° un segundo ---
+    for (uint8_t i = 0; i < 50; i++) {
+        uint16_t pulse = angle_to_us(0);
+        SERVO_PIN = 1;
+        wait_us(pulse);
+        SERVO_PIN = 0;
+        wait_us(PERIOD_US - pulse);
+    }
+
+    // --- De 0° a 90° ---
+    for (uint8_t ang = 0; ang <= 90; ang++) {
+        uint16_t pulse = angle_to_us(ang);
+        SERVO_PIN = 1;
+        wait_us(pulse);
+        SERVO_PIN = 0;
+        wait_us(PERIOD_US - pulse);
+    }
+
+    // --- Mantener en 90° un segundo ---
+    for (uint8_t i = 0; i < 50; i++) {
+        uint16_t pulse = angle_to_us(90);
+        SERVO_PIN = 1;
+        wait_us(pulse);
+        SERVO_PIN = 0;
+        wait_us(PERIOD_US - pulse);
+    }
+}
+//-------------------------------------------------------------
+
+
 
 // --- Inicializaci�n del PWM ---
 void PWM_Init() {
@@ -114,8 +195,7 @@ void setup() {
 
     TRISA0 = 1;
     
-    TRISC0 = 0;
-    RC0 = 0;
+
 
 
     ADCON1 = 0b10000000;  // ADFM=1, PCFG=0000
@@ -169,55 +249,26 @@ void main(void){
         valorADC = leerADC(0);  // Leer canal AN0
         voltaje = (valorADC * 5.0) / 1023.0;  // Convertir a voltaje (0–5V)
 
+        // --- Evaluar estado del sistema ---
         if (voltaje > UMBRAL) {
-            LED = 1;           // Enciende LED
-            inhabilitado = 1;  // Bloquear movimiento
-            recibido = 'S';    // Fuerza detener motores
+            LED = 1;
+            inhabilitado = 1;
+            recibido = 'S'; // Fuerza detener motores
         } else {
             LED = 0;
             inhabilitado = 0;
         }
 
-        // Si el sistema está inhabilitado, los motores deben detenerse de inmediato
-        if (inhabilitado) {
-            PWM_SetDuty1_Porcentaje(0);
-            PWM_SetDuty2_Porcentaje(0);
-            motor_parar();
-            
-        }
-
-        // Si se recibió un dato
+        // --- Si se recibió un dato ---
         if (bandera) {
             bandera = 0;  // limpiar bandera
-            
-            
-            if (recibido == 'X' && inhabilitado == 1) {
-                // --- Mover a 90° (pulso de 1.5 ms durante 1 segundo) ---
-                for (int i = 0; i < 50; i++) {
-                    RC0 = 1;
-                    __delay_ms(1);       // 1 ms
-                    __delay_us(500);     // +0.5 ms = 1.5 ms total (≈ 90°)
-                    RC0 = 0;
-                    __delay_ms(18);      // 20 ms periodo total
-                }
 
-                __delay_ms(700); // Pausa
-
-                // --- Volver a 0° (pulso de 0.5 ms durante 1 segundo) ---
-                for (int i = 0; i < 50; i++) {
-                    RC0 = 1;
-                    __delay_us(500);     // 0.5 ms → posición inicial
-                    RC0 = 0;
-                    __delay_ms(19);      // 20 ms periodo
-                }
-
-                __delay_ms(700);
+            // 🔹 Permitir siempre mover el servo con 'X', incluso si está inhabilitado
+            if (recibido == 'X') {
+                mover_servo();   // Ejecutar movimiento de 90°→0°→90°
             }
 
-
-
-
-            // Solo permitir movimiento si NO está inhabilitado
+            // 🔹 Control de movimiento solo si no está inhabilitado
             if (!inhabilitado) {
                 if (recibido == 'A') {
                     motor_adelante();
@@ -237,13 +288,16 @@ void main(void){
                     motor_parar();
                 }
             } else {
-                // Si está inhabilitado, forzar parada
+                // Si está inhabilitado, siempre detener motores
+                PWM_SetDuty1_Porcentaje(0);
+                PWM_SetDuty2_Porcentaje(0);
                 motor_parar();
             }
         }
 
         __delay_ms(50);
     }
+
 
 }
 
