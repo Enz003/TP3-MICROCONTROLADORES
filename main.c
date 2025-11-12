@@ -253,4 +253,4 @@ void interrupt Interrupciones (void){
         bandera=1;              //bandera indica dato recibido
     }
 
-}
+}//
