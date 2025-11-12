@@ -6,7 +6,7 @@
 //#include <htc.h>
 #include "usart.h"
 
-char servo_en_movimiento = 0;
+
 char bandera;           //Variable global indica que lleg� un caracter por el puerto serial
 char recibido;          //caracter recibido
 int inhabilitado;
@@ -72,7 +72,6 @@ static inline uint16_t angle_to_us(uint8_t ang)
 // --- Movimiento de servo 90°→0°→90° ---
 void mover_servo(void)
 {
-    servo_en_movimiento = 1;
     SERVO_TRIS = 0;
     SERVO_PIN = 0;
 
@@ -117,7 +116,6 @@ void mover_servo(void)
         SERVO_PIN = 0;
         wait_us(PERIOD_US - pulse);
     }
-    servo_en_movimiento = 0;
 }
 //-------------------------------------------------------------
 
@@ -247,20 +245,19 @@ void main(void){
     init_comms();	// set up the USART - settings defined in usart.h
 
     while(1){
-        // Solo actualizar estado si el servo NO está en movimiento
-        if (!servo_en_movimiento) {
-            valorADC = leerADC(0);
-            voltaje = (valorADC * 5.0) / 1023.0;
+    // Solo actualizar estado si el servo NO está en movimiento
+        valorADC = leerADC(0);
+        voltaje = (valorADC * 5.0) / 1023.0;
 
-            if (voltaje > UMBRAL) {
-                LED = 1;
-                inhabilitado = 1;
-                recibido = 'S'; // Fuerza detener motores
-            } else {
-                LED = 0;
-                inhabilitado = 0;
-            }
+        if (voltaje > UMBRAL) {
+            LED = 1;
+            inhabilitado = 1;
+            recibido = 'S'; // Fuerza detener motores
+        } else {
+            LED = 0;
+            inhabilitado = 0;
         }
+        
 
 
         // --- Si se recibió un dato ---
