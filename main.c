@@ -3,19 +3,12 @@
 #pragma config WDTE=OFF, FOSC=XT, CPD=OFF, LVP=OFF
 #define _XTAL_FREQ 4000000
 #include <stdio.h>
-//#include <htc.h>
 #include "usart.h"
 
 
-char bandera;           //Variable global indica que lleg� un caracter por el puerto serial
-char recibido;          //caracter recibido
+char bandera;           // Variable global indica que llegó un caracter por el puerto serial
+char recibido;          // caracter recibido
 int inhabilitado;
-
-/* A simple demonstration of serial communications which
- * incorporates the on-board hardware USART of the Microchip
- * PIC16Fxxx series of devices. */
-
-
 
 // Pines del puente H
 #define IN1 RD4
@@ -25,7 +18,6 @@ int inhabilitado;
 
 #define LED RD3
 
-
 // === CONFIGURACIÓN SERVO ===
 #define SERVO_TRIS TRISDbits.TRISD2
 #define SERVO_PIN  PORTDbits.RD2
@@ -34,14 +26,10 @@ int inhabilitado;
 #define PULSE_US_90DEG  2000u
 #define PERIOD_US       20000u
 
-
-
-
 // Velocidades del PWM
 int vel_giro = 28;
 int vel_derecho = 20;
 int vel_curva = 15;
-
 
 unsigned int valorADC;
 float voltaje;
@@ -117,71 +105,55 @@ void mover_servo(void)
         wait_us(PERIOD_US - pulse);
     }
 }
-//-------------------------------------------------------------
 
-
-
-// --- Inicializaci�n del PWM ---
+// --- Inicialización del PWM ---
 void PWM_Init() {
-    // Configurar CCP1 y CCP2 como PWM
     TRISC2 = 0;   // CCP1 -> RC2 (EN1)
     TRISC1 = 0;   // CCP2 -> RC1 (EN2)
 
-    T2CON=0x07;		// tmr2 on, pre divisor 16
-    PR2 = 0xFF;   // Periodo PWM
+    T2CON = 0x07;  // tmr2 on, pre divisor 16
+    PR2 = 0xFF;    // Periodo PWM
 
-    CCP1CON=0x0C;		//config. PWM ccp1	
-    CCP2CON=0x0C;		// config. PWM ccp2
+    CCP1CON = 0x0C;  // config. PWM ccp1	
+    CCP2CON = 0x0C;  // config. PWM ccp2
 
-    // Ciclo inicial
     CCPR1L = 0x00;
     CCPR2L = 0x00;
-
 }
 
 // --- Configurar ciclo de trabajo del PWM ---
 void PWM_SetDuty1_Porcentaje(int dutyPorcentaje) {
-    if (dutyPorcentaje < 0) dutyPorcentaje = 0;     // Limite inferior
-    if (dutyPorcentaje > 100) dutyPorcentaje = 100; // Limite superior
-
-    // Escalar 0?100% a 0?255
+    if (dutyPorcentaje < 0) dutyPorcentaje = 0;
+    if (dutyPorcentaje > 100) dutyPorcentaje = 100;
     int valor = (dutyPorcentaje * 255) / 100;
-
-    CCPR1L = valor;  // Cargar en registro de ciclo de trabajo
+    CCPR1L = valor;
 }
+
 void PWM_SetDuty2_Porcentaje(int dutyPorcentaje) {
-    if (dutyPorcentaje < 0) dutyPorcentaje = 0;     // Limite inferior
-    if (dutyPorcentaje > 100) dutyPorcentaje = 100; // Limite superior
-
-    // Escalar 0?100% a 0?255
+    if (dutyPorcentaje < 0) dutyPorcentaje = 0;
+    if (dutyPorcentaje > 100) dutyPorcentaje = 100;
     int valor = (dutyPorcentaje * 255) / 100;
-
-    CCPR2L = valor;  // Cargar en registro de ciclo de trabajo
+    CCPR2L = valor;
 }
 
 unsigned int leerADC(uint8_t canal) {
-    if (canal > 7) return 0;  // Solo AN0?AN7 disponibles
+    if (canal > 7) return 0;
 
-    ADCON0 &= 0b11000101;         // Limpiar bits de selecci�n de canal
-    ADCON0 |= (canal << 3);       // Establecer nuevo canal
-    __delay_us(10);               // Peque�o tiempo de adquisici�n
+    ADCON0 &= 0b11000101;
+    ADCON0 |= (canal << 3);
+    __delay_us(10);
 
-    ADCON0bits.GO_nDONE = 1;      // Iniciar conversi�n
-    while (ADCON0bits.GO_nDONE);  // Esperar a que termine
+    ADCON0bits.GO_nDONE = 1;
+    while (ADCON0bits.GO_nDONE);
 
-    return ((ADRESH << 8) + ADRESL);  // Retornar resultado (10 bits)
+    return ((ADRESH << 8) + ADRESL);
 }
 
-
-
-
-// --- Inicializaci�n general ---
+// --- Inicialización general ---
 void setup() {
-    // Inicializar PWM
     PWM_Init();
     TMR2ON = 1;
 
-    // Motores salida
     TRISD4 = 0;
     TRISD5 = 0;
     TRISD6 = 0;
@@ -191,15 +163,10 @@ void setup() {
     TRISC7 = 1;
 
     TRISD3 = 0; // LED
-
     TRISA0 = 1;
-    
-
-
 
     ADCON1 = 0b10000000;  // ADFM=1, PCFG=0000
-    ADCON0 = 0b01000001;  // Canal AN0 seleccionado (CHS=000), ADC encendido
-
+    ADCON0 = 0b01000001;  // Canal AN0 seleccionado, ADC encendido
     
     __delay_ms(10);
 }
@@ -208,24 +175,25 @@ void setup() {
 void motor_adelante() {
     PWM_SetDuty1_Porcentaje(vel_derecho);  
     PWM_SetDuty2_Porcentaje(vel_derecho);
-    IN1 = 0; IN2 = 1;   // Motor izquierdo adelante
-    IN3 = 1; IN4 = 0;   // Motor derecho adelante
+    IN1 = 0; IN2 = 1;
+    IN3 = 1; IN4 = 0;
 }
+
 void motor_atras(){
     PWM_SetDuty1_Porcentaje(vel_derecho);  
     PWM_SetDuty2_Porcentaje(vel_derecho);
-    IN1 = 1; IN2 = 0;   // Motor izquierdo atras
-    IN3 = 0; IN4 = 1;   // Motor derecho atras
+    IN1 = 1; IN2 = 0;
+    IN3 = 0; IN4 = 1;
 }
 
 void motor_giro_izquierda() {
-    IN1 = 1; IN2 = 0;   // Motor izquierdo atr�s
-    IN3 = 1; IN4 = 0;   // Motor derecho adelante
+    IN1 = 1; IN2 = 0;
+    IN3 = 1; IN4 = 0;
 }
 
 void motor_giro_derecha() {
-    IN1 = 0; IN2 = 1;   // Motor izquierdo adelante
-    IN3 = 0; IN4 = 1;   // Motor derecho atr�s
+    IN1 = 0; IN2 = 1;
+    IN3 = 0; IN4 = 1;
 }
 
 void motor_parar() {
@@ -233,45 +201,39 @@ void motor_parar() {
     IN3 = 0; IN4 = 0;
 }
 
-
-
 void main(void){
-    bandera=0;      //no lleg� datos
-    recibido=0;     //se inicializa recibido
-    GIE=1;          //Habilita interrupciones
-    PEIE=1;         //Habilita interrupciones de perif�ricos
-    RCIE=1;         //Habilita las interrupciones de datos recibidos por puerto serie
+    bandera = 0;
+    recibido = 0;
+    GIE = 1;
+    PEIE = 1;
+    RCIE = 1;
     setup();
-    init_comms();	// set up the USART - settings defined in usart.h
+    init_comms();
 
     while(1){
-    // Solo actualizar estado si el servo NO está en movimiento
+        // Leer ADC y actualizar estado de inhibición
         valorADC = leerADC(0);
         voltaje = (valorADC * 5.0) / 1023.0;
 
         if (voltaje > UMBRAL) {
             LED = 1;
             inhabilitado = 1;
-            recibido = 'S'; // Fuerza detener motores
+            // 🔹 NO forzar recibido = 'S' aquí
         } else {
             LED = 0;
             inhabilitado = 0;
         }
-        
-
 
         // --- Si se recibió un dato ---
         if (bandera) {
-            bandera = 0;  // limpiar bandera
+            bandera = 0;
 
-            // 🔹 Permitir siempre mover el servo con 'X', incluso si está inhabilitado
+            // 🔹 El servo SIEMPRE responde a 'X', sin importar el estado de inhabilitado
             if (recibido == 'X') {
-                mover_servo();   // Ejecutar movimiento de 90°→0°→90°
-                continue;
+                mover_servo();
             }
-
             // 🔹 Control de movimiento solo si no está inhabilitado
-            if (!inhabilitado) {
+            else if (!inhabilitado) {
                 if (recibido == 'A') {
                     motor_adelante();
                 } else if (recibido == 'R') {
@@ -289,24 +251,25 @@ void main(void){
                     PWM_SetDuty2_Porcentaje(0);
                     motor_parar();
                 }
-            } else {
-                // Si está inhabilitado, siempre detener motores
-                PWM_SetDuty1_Porcentaje(0);
-                PWM_SetDuty2_Porcentaje(0);
-                motor_parar();
+            }
+            // 🔹 Si está inhabilitado, detener motores para cualquier comando de movimiento
+            else {
+                if (recibido == 'A' || recibido == 'R' || 
+                    recibido == 'I' || recibido == 'D' || recibido == 'S') {
+                    PWM_SetDuty1_Porcentaje(0);
+                    PWM_SetDuty2_Porcentaje(0);
+                    motor_parar();
+                }
             }
         }
 
         __delay_ms(50);
     }
-
-
 }
 
 void interrupt Interrupciones (void){
-    if(RCIF){                   //si RCIF=1
-        recibido=RCREG;         //lee dato recibido
-        bandera=1;              //bandera indica dato recibido
+    if(RCIF){
+        recibido = RCREG;
+        bandera = 1;
     }
-
 }
