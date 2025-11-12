@@ -1,6 +1,7 @@
 /*
  * Control de Servo MG996R con PIC16F877A usando Timer0
  * Mueve el servo a 90 grados y luego a 0 grados
+ * Mantiene cada posición por el tiempo especificado
  * Conexión: Servo conectado al pin RC0
  * Cristal: 20 MHz
  */
@@ -22,29 +23,26 @@
 #define SERVO_PIN PORTCbits.RC0 // Pin de salida para el servo
 
 // Variables globales
-volatile uint16_t pulso_alto = 1500;  // Ancho de pulso en microsegundos (inicial 90°)
-volatile uint16_t contador_20ms = 0;   // Contador para periodo de 20ms
-volatile uint8_t estado_pwm = 0;       // Estado del PWM (0=bajo, 1=alto)
+volatile uint16_t pulso_us = 1500;     // Ancho de pulso en microsegundos
+volatile uint16_t contador_ms = 0;      // Contador de milisegundos
+volatile uint8_t flag_20ms = 0;         // Bandera para generar pulso cada 20ms
+
+// Configuración del Timer0 para generar interrupciones cada ~1ms
+// Con Fosc=20MHz, Prescaler=256, TMR0=131 -> ~1ms
+#define TMR0_RELOAD 131
 
 // Función de interrupción
 void __interrupt() ISR(void) {
-    if (INTCONbits.TMR0IF) {  // Interrupción del Timer0
-        INTCONbits.TMR0IF = 0; // Limpiar bandera
+    if (INTCONbits.TMR0IF) {
+        INTCONbits.TMR0IF = 0;  // Limpiar bandera
+        TMR0 = TMR0_RELOAD;      // Recargar Timer0
         
-        if (estado_pwm == 1) {
-            // Pulso alto completado, poner pin en bajo
-            SERVO_PIN = 0;
-            estado_pwm = 0;
-            // Cargar timer para completar el periodo de 20ms
-            TMR0 = 0;
-        } else {
-            contador_20ms++;
-            // Cada 20ms generar un nuevo pulso
-            if (contador_20ms >= 200) {  // Aproximadamente 20ms
-                contador_20ms = 0;
-                SERVO_PIN = 1;
-                estado_pwm = 1;
-            }
+        contador_ms++;
+        
+        // Cada 20ms activar bandera para generar pulso
+        if (contador_ms >= 20) {
+            contador_ms = 0;
+            flag_20ms = 1;
         }
     }
 }
@@ -56,45 +54,56 @@ void Sistema_Init() {
     SERVO_PIN = 0;          // Iniciar en bajo
     
     // Configurar Timer0
-    // Prescaler 1:32
-    OPTION_REGbits.T0CS = 0;   // Usar reloj interno
-    OPTION_REGbits.PSA = 0;    // Asignar prescaler a Timer0
-    OPTION_REGbits.PS = 0b100; // Prescaler 1:32
+    OPTION_REGbits.T0CS = 0;    // Usar reloj interno (Fosc/4)
+    OPTION_REGbits.PSA = 0;     // Asignar prescaler a Timer0
+    OPTION_REGbits.PS = 0b111;  // Prescaler 1:256
     
-    TMR0 = 0;  // Limpiar Timer0
+    TMR0 = TMR0_RELOAD;  // Cargar valor inicial
     
     // Habilitar interrupciones
     INTCONbits.TMR0IE = 1;  // Habilitar interrupción de Timer0
     INTCONbits.GIE = 1;     // Habilitar interrupciones globales
 }
 
-// Función para generar pulso PWM por software
-void Generar_Pulso_Servo() {
+// Función para generar un pulso PWM
+void Generar_Pulso() {
     SERVO_PIN = 1;  // Poner pin en alto
     
-    // Generar retardo del ancho de pulso
-    for(uint16_t i = 0; i < pulso_alto; i++) {
+    // Generar retardo del ancho de pulso en microsegundos
+    uint16_t tiempo = pulso_us;
+    while(tiempo > 0) {
         __delay_us(1);
+        tiempo--;
     }
     
     SERVO_PIN = 0;  // Poner pin en bajo
 }
 
-// Función para mover el servo a un ángulo específico
-// angulo: 0 a 180 grados
+// Función para establecer el ángulo del servo
 void Servo_SetAngulo(uint8_t angulo) {
     // Limitar el ángulo entre 0 y 180
     if (angulo > 180) angulo = 180;
     
     // Mapear el ángulo a microsegundos (1000us = 0°, 2000us = 180°)
-    // pulso = 1000 + (angulo * 1000) / 180
-    pulso_alto = 1000 + ((uint32_t)angulo * 1000) / 180;
+    pulso_us = 1000 + ((uint32_t)angulo * 1000) / 180;
 }
 
-// Función de retardo
-void Delay_ms(uint16_t ms) {
-    for(uint16_t i = 0; i < ms; i++) {
-        __delay_ms(1);
+// Función para mantener el servo en una posición por X segundos
+void Servo_Mantener(uint8_t angulo, uint8_t segundos) {
+    // Establecer el ángulo deseado
+    Servo_SetAngulo(angulo);
+    
+    // Calcular cuántos pulsos necesitamos (50 pulsos por segundo a 20ms cada uno)
+    uint16_t pulsos_totales = segundos * 50;
+    
+    // Generar los pulsos
+    for(uint16_t i = 0; i < pulsos_totales; i++) {
+        // Esperar la bandera de 20ms
+        while(flag_20ms == 0);
+        flag_20ms = 0;
+        
+        // Generar el pulso
+        Generar_Pulso();
     }
 }
 
@@ -103,22 +112,10 @@ void main(void) {
     Sistema_Init();
     
     while(1) {
-        // Mover el servo a 90 grados
-        Servo_SetAngulo(90);
+        // Mover a 90 grados y mantener por 2 segundos
+        Servo_Mantener(90, 2);
         
-        // Mantener la posición enviando pulsos cada 20ms
-        for(uint8_t i = 0; i < 100; i++) {  // Durante 2 segundos
-            Generar_Pulso_Servo();
-            Delay_ms(18);  // Completar periodo de 20ms (aproximado)
-        }
-        
-        // Mover el servo a 0 grados
-        Servo_SetAngulo(0);
-        
-        // Mantener la posición enviando pulsos cada 20ms
-        for(uint8_t i = 0; i < 100; i++) {  // Durante 2 segundos
-            Generar_Pulso_Servo();
-            Delay_ms(18);  // Completar periodo de 20ms (aproximado)
-        }
+        // Mover a 0 grados y mantener por 2 segundos
+        Servo_Mantener(0, 2);
     }
 }
