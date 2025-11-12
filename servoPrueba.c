@@ -3,24 +3,21 @@
 #pragma config FOSC = XT, WDTE = OFF, PWRTE = ON, BOREN = ON, LVP = OFF, CPD = OFF, WRT = OFF, CP = OFF
 
 // === VARIABLES GLOBALES ===
-volatile unsigned int periodo = 0;
-volatile unsigned int ancho = 6; // 6 interrupciones ≈ 1.5 ms → 90°
+int periodo = 0;
+int ancho = 20; // 6 interrupciones ≈ 1.5 ms → 90°
 
 void __interrupt() ISR(void) {
     if (T0IF) {
-        TMR0 = 0;    // reinicia Timer0 (cada overflow ≈ 0.256 ms)
+        TMR0 = 156;    // reinicia Timer0 (cada overflow ≈ 0.256 ms)
         T0IF = 0;    // limpia bandera
-
         periodo++;
 
-        if (periodo == 1)
+        if (periodo == 200)
+            periodo = 0;
             RC1 = 1; // comienza el pulso
-
         if (periodo == ancho)
             RC1 = 0; // termina el pulso
 
-        if (periodo >= 78) // ≈20 ms por ciclo
-            periodo = 0;
     }
 }
 
@@ -38,6 +35,6 @@ void main(void) {
     while (1) {
         // Servo fijo en 90°
         // (Si querés probar otros ángulos, cambiá 'ancho' a 4 o 8)
-        ancho = 6; // centro (90°)
+        ancho = 20; // centro (90°)
     }
 }
